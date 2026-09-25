@@ -249,7 +249,7 @@ impl Index {
     }
 
     pub fn remove_file(&mut self, path: &Path) {
-        let Some(id) = self.file_id(path) else { return };
+        let Some(id) = self.by_path.remove(&normalize_path(path)) else { return };
         self.clear_slots(id);
         for resource in &mut self.resources {
             resource.files.retain(|f| *f != id);

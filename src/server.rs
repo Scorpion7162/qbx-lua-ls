@@ -512,6 +512,7 @@ impl Server {
 
     fn watched_files_changed(&mut self, changes: Vec<FileEvent>) {
         let mut manifests_changed = false;
+        let mut manifests_deleted = false;
         for change in changes {
             let Some(path) = uri_to_path(&change.uri) else { continue };
             if path.extension().is_some_and(|e| e == "cfg") {
@@ -523,8 +524,12 @@ impl Server {
             } else if is_manifest_file(&path) {
                 // A manifest appearing or vanishing changes which resources count as installed.
                 qbx_lua_analysis::startup::clear_cache();
-                self.ws.reload_manifest(&path);
                 manifests_changed = true;
+                if change.typ == FileChangeType::DELETED {
+                    manifests_deleted = true;
+                } else {
+                    self.ws.reload_manifest(&path);
+                }
             } else if change.typ == FileChangeType::DELETED {
                 self.ws.index.remove_file(&path);
             } else if path.extension().is_some_and(|e| e == "lua") && !self.docs.contains_key(&change.uri) {
@@ -532,6 +537,11 @@ impl Server {
             }
         }
         if manifests_changed {
+            if manifests_deleted {
+                self.ws.scan();
+                self.dirty.extend(self.docs.keys().cloned());
+                self.flush_index();
+            }
             self.ws.link_imports();
         }
         self.workspace_stale = true;
